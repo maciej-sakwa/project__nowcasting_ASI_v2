@@ -6,7 +6,7 @@ from functools import partial
 Image pre-processing module. Contains definition of the class used to preprocess images.
 V.1.0.0 MS 09/10/23
 
-Classes PreProcessImage() - image preprocessing engine
+Classes PreProcessImage() - image preprocessing engine for circular images
     Init methods:
         |- __init__() - initialize the transformation pipeline
     Methods:
@@ -119,3 +119,5 @@ class PreProcessImage():
         new_image = self._execute_pipeline(image)
 
         return new_image
+    
+

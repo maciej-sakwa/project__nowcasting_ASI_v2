@@ -1,14 +1,7 @@
-MODEL:
+RUN:
   run_id: 0
-  type: 'scnn_15_5'                                         # model_type chosen for the training.
+  type: 'conv_lstm'                                         # model_type chosen for the training.
   forecast_horizon: 15
-  sequence_horizon: 5                                     # time horizon.
-  NO_IMAGES: 3
-  EPSILON: 1e-3
-  img_size: [128, 128, 3]                                       # image size.
-  CHANNELS: 1                                                # image channels.
-  elevation_threshold: 20
-  split: 0.8
 
   epochs: 15
   patience: 5
@@ -20,38 +13,31 @@ MODEL:
 
 MLFLOW:
   tracking_uri: 'sqlite:///mlflow.db'
-  experiment_name: 'CNN_nowcasting_shifted_images'
+  experiment_name: 'Conv_lstm'
   note: "Same params, mean absolte error"
 
 # Remember to modify this
 PATHS:
-  input_folder: data\IR_images              # Raw images folder path
-  output_folder: data\standard_IR            # Postprocessed images folder path
-  weather_files: data\sensors                          # Weather station data folder path
-  checkpoint: model                                                # path to the model weight folder
+  images: /media/maciej/Volume/data/001_nowcasting/standard_IR              # Raw images folder path
+  sensor: /data/df_data_15_5.parquet.gzip                          # Weather station data folder path
+  out_final: /data/df_final.parquet.gzip
+  checkpoint: /model/                                                # path to the model weight folder
 
 # Parameter dictionaries
 PARAMS:
-  train_params:
-    batch_size: 64
-    dim: [128, 128, 3]
-    channel_IMG: 1
-    shuffle: False
-    iftest: False
+  batch_size: 32
+  dim: (8, 128, 128, 1)
+  channel_IMG: 1
+  shuffle: False
+  elevation_threshold: 20
+  train_split: 0.7
+  val_split: 0.2
+  epsilon: 1e-3
 
-  val_params:
-    batch_size: 64
-    dim: [128, 128, 3]
-    channel_IMG: 1
-    shuffle: False
-    iftest: False
-
-  test_params:
-    batch_size: 1
-    dim: [128, 128, 3]
-    channel_IMG: 1
-    shuffle: False
-    iftest: False
+MODEL:
+  residual_layers: 2
+  residual_filters: 32
+  lstm_units: 32
 
 
 test:
