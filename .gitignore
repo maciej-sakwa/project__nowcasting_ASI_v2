@@ -1,0 +1,12 @@
+*.pyc
+/*/__pychache__
+
+
+/data
+/model
+/mlruns
+/results
+
+/*.db
+/sandbox_*
+
