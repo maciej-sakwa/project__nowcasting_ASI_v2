@@ -31,7 +31,7 @@ def get_date_range(image_names):
     
     return date_times
 
-def get_sequence_dataframe(image_path, n_sequece=8):
+def get_df_sequence_from_files(image_path, n_sequece=8):
     
     # Get all the images paths
     t_0 = [item for item in image_path.glob('*/*')]
@@ -74,7 +74,7 @@ def check_summer_time(date: datetime) -> bool:
     
     return False
 
-def generate_weather_dataframe(GHI_PATH: Path, FORECAST_HORIZON: int, CLEAR_SKY_MODEL='simplified_solis') -> pd.DataFrame:
+def get_df_weather_from_files(data_path: Path, horizon: int, cs_model='simplified_solis', epsilon=1e-3) -> pd.DataFrame:
     """Example of the dataframe generation funcion
 
     Args:
@@ -89,26 +89,25 @@ def generate_weather_dataframe(GHI_PATH: Path, FORECAST_HORIZON: int, CLEAR_SKY_
     
     df_data = pd.DataFrame()
 
-    EPSILON = 1e-6
 
-
-    for day in GHI_PATH.glob('*'):
+    for day in data_path.glob('*'):
 
         # Load data
-        df_test = pd.read_csv(GHI_PATH / day)
+        df_test = pd.read_csv(data_path / day)
 
         # Change the str to datetime format
-        df_test['date'] = pd.to_datetime(df_test['date'], format='%Y-%m-%d %H:%M:%S')
+        df_test.index = pd.to_datetime(df_test['date'])
+        df_test.drop(columns='date', inplace=True)
         
         # Get sun position and the clear sky parameters based on the chosen sky model
-        times = pd.date_range(df_test['date'].min(), df_test['date'].max(), freq='1T')
+        times = pd.date_range(df_test.index.min(), df_test.index.max(), freq='1min')
         loc = location.Location(latitude = 45.5, longitude = 9.15)
-        clear_sky = loc.get_clearsky(times, model=CLEAR_SKY_MODEL)
+        clear_sky = loc.get_clearsky(times, model=cs_model)
         solpos = solarposition.get_solarposition(times, latitude=45.5, longitude=9.15)
         
         # Merge the data into a single day df
         df_sun = clear_sky.merge(solpos[['elevation', 'azimuth']], left_index=True, right_index=True)
-        df_day = df_test.merge(df_sun, left_on='date', right_index=True)
+        df_day = df_test.merge(df_sun, left_index=True, right_index=True)
         
         # Filter recording artifacts
         filter_artifacts = (df_day['ghi1'] > 1500)
@@ -116,13 +115,19 @@ def generate_weather_dataframe(GHI_PATH: Path, FORECAST_HORIZON: int, CLEAR_SKY_
         df_day['ghi1'] = df_day['ghi1'].interpolate(method='time')
 
         # Define CSI
-        df_day['CSI'] = df_day.ghi1.values / (df_day.ghi.values + EPSILON)
+        df_day['CSI'] = df_day.ghi1.values / (df_day.ghi.values + epsilon)
 
         # Add the desired 3 columns
-        df_day['Target_GHIr'] = df_day.ghi1.shift(-FORECAST_HORIZON).values
-        df_day['Target_CSI'] = df_day.CSI.shift(-FORECAST_HORIZON).values
-        df_day['Target_GHICS'] = df_day.ghi.shift(-FORECAST_HORIZON).values
+        df_day['Target_GHIr'] = df_day.ghi1.shift(-horizon).values
+        df_day['Target_CSI'] = df_day.CSI.shift(-horizon).values
+        df_day['Target_GHICS'] = df_day.ghi.shift(-horizon).values
 
         df_data = pd.concat((df_data, df_day), ignore_index=True)
 
+    # Remove unnecessary columns
+    df_data.drop(columns=['humidity', 'temperature', 'dni', 'dhi', 'azimuth'], inplace=True)
+
     return df_data
+
+
+    

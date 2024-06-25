@@ -19,9 +19,10 @@ MLFLOW:
 # Remember to modify this
 PATHS:
   images: /media/maciej/Volume/data/001_nowcasting/standard_IR              # Raw images folder path
-  sensor: /data/df_data_15_5.parquet.gzip                          # Weather station data folder path
-  out_final: /data/df_final.parquet.gzip
-  checkpoint: /model/                                                # path to the model weight folder
+  sensor: /media/maciej/Volume/data/001_nowcasting/sensor                   # Weather station data folder path
+  meteo_path: ./data/df_meteo_final.parquet.gzip
+  filename_path: ./data/df_final.parquet.gzip
+  checkpoint: ./model/                                                # path to the model weight folder
 
 # Parameter dictionaries
 PARAMS:
@@ -32,13 +33,12 @@ PARAMS:
   elevation_threshold: 20
   train_split: 0.7
   val_split: 0.2
-  epsilon: 1e-3
+  epsilon: 0.001
 
 MODEL:
   residual_layers: 2
   residual_filters: 32
   lstm_units: 32
-
 
 test:
   day_1: '2024-06-01'

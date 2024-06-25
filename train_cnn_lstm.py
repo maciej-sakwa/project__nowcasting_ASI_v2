@@ -13,6 +13,11 @@ from src.weather_data_preprocessing import *
 from utils.dotdict import DotDict
 
 
+# Preprocess data
+def preprocess_sensor_data(in_path, out_path, horizon):
+    df_data = get_df_weather_from_files(in_path, horizon)
+    df_data.to_parquet(out_path)
+
 #TF data functions
 def parse_sequence(row):
     
@@ -39,63 +44,80 @@ def compile_dataset_from_dataframe(df, batch_size):
 def setup(config):
 
     ### SETUP ###
+    print('### SETUP ###')
 
-    IMAGE_PATH  = Path(config.PATHS.images)
-    METEO_PATH  = Path(config.PATHS.sensor)
-    OUT_PATH    = Path(config.PATHS.out_final)
+    IMAGES_PATH = Path(config.PATHS.images)
+    SENSOR_PATH = Path(config.PATHS.sensor)
+    METEO_PATH  = Path(config.PATHS.meteo_path)
+    OUT_PATH    = Path(config.PATHS.filename_path)
 
     ELEVATION   = config.PARAMS.elevation_threshold
     EPSILON     = config.PARAMS.epsilon
 
-    # Create the filenames dataframe
-    df = get_sequence_dataframe(IMAGE_PATH, n_sequece=8)
+    HORIZON     = config.RUN.forecast_horizon
 
-    # Load the old file with 15 min horizon
-    df_meteo = pd.read_parquet(METEO_PATH)
-    
-    # Index cleaning
-    df_meteo.index = pd.to_datetime(df_meteo['date'])
-    df_meteo.index = df_meteo.index.tz_convert(None)
-    df_meteo.index.name = None
+    # Check if meteo data is generated
+    if METEO_PATH.exists():
+        print('Meteo data exists: \n Loading meteo data...')
+        df_meteo = pd.read_parquet(METEO_PATH)
+    else:
+        print('Meteo data does not exists: \n Generating meteo data...')
+        preprocess_sensor_data(SENSOR_PATH, METEO_PATH, HORIZON)
+        df_meteo = pd.read_parquet(METEO_PATH)
+        print('Done.')
 
-    # Get variables of interest
-    df_meteo_targets = df_meteo[['Target_GHIr', 'Target_GHICS']].copy()
+    # Check if filenames data is generated
+    if OUT_PATH.exists():
+        print('Filepaths data exists: \n Loading filepaths data...')
+        pass
+    else: 
+        print('Filepaths data does not exist: \n Generating filepaths data...')
+        df = get_df_sequence_from_files(IMAGES_PATH, n_sequece=8)
 
-    # Scale the data
-    df_load_targets_max = df_meteo_targets / df_meteo_targets.max()
+        # # Index cleaning
+        # df_meteo.index = df_meteo.index.tz_convert(None)
+        # df_meteo.index.name = None
 
-    # Add the elevation
-    df_load_targets_max = pd.concat([df_load_targets_max, df_meteo[['elevation']].copy()], axis=1)
+        # Get variables of interest
+        df_meteo_targets = df_meteo[['Target_GHIr', 'Target_GHICS']].copy()
 
-    # Add the CSI
-    df_load_targets_max['CSI'] = df_load_targets_max['Target_GHIr'].values / (df_load_targets_max['Target_GHICS'].values + EPSILON)
+        # Scale the data
+        df_load_targets_max = df_meteo_targets / df_meteo_targets.max()
 
-    # output the data
-    df_load_final = df_load_targets_max[df_load_targets_max.index.isin(df.index)]
+        # Add the elevation
+        df_load_targets_max = pd.concat([df_load_targets_max, df_meteo[['elevation']].copy()], axis=1)
 
-    # Create final dataframe
-    df_final = pd.concat([df, df_load_final[['CSI', 'elevation']]], axis=1)
+        # Add the CSI
+        df_load_targets_max['CSI'] = df_load_targets_max['Target_GHIr'].values / (df_load_targets_max['Target_GHICS'].values + EPSILON)
 
-    # Filter the data by elevation
-    df_final.dropna(inplace=True)
-    df_final = df_final[df_final.elevation > ELEVATION].copy()
-    df_final.drop(columns=['elevation'], inplace=True)
+        # output the data
+        df_load_final = df_load_targets_max[df_load_targets_max.index.isin(df.index)]
 
-    # Standardize the label
-    df_final['CSI'] = ((df_final['CSI'] - df_final['CSI'].mean()) / df_final['CSI'].std())
+        # Create final dataframe
+        df_final = pd.concat([df, df_load_final[['CSI', 'elevation']]], axis=1)
 
-    # Homogenise the data type
-    df_final = convert_to_str(df_final)
+        # Filter the data by elevation
+        df_final.dropna(inplace=True)
+        df_final = df_final[df_final.elevation > ELEVATION].copy()
+        df_final.drop(columns=['elevation'], inplace=True)
 
-    # Remove index
-    df_final.reset_index(inplace=True, drop='index')
-    
-    # Save df
-    df_final.to_parquet(OUT_PATH)
+        # Standardize the label
+        df_final['CSI'] = ((df_final['CSI'] - df_final['CSI'].mean()) / df_final['CSI'].std())
+
+        # Homogenise the data type
+        df_final = convert_to_str(df_final)
+
+        # Remove index
+        df_final.reset_index(inplace=True, drop='index')
+        
+        # Save df
+        df_final.to_parquet(OUT_PATH)
+        print('Done')
 
 def train(config):
 
     ### TRAIN ###
+    print('### TRAIN ###')
 
     tf.keras.backend.clear_session()
     print(tf.__version__)
@@ -124,7 +146,7 @@ def train(config):
     N_FILTERS   = config.MODEL.residual_filters
     N_LSTM_CELL = config.MODEL.lstm_units
 
-    OUT_PATH    = config.PATHS.out_final
+    OUT_PATH    = Path(config.PATHS.filename_path)
 
     # Prepare ds
     df = pd.read_parquet(OUT_PATH)
